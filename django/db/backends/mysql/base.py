@@ -399,6 +399,14 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             cursor.execute('SET SQL_AUTO_IS_NULL = 0')
         return CursorWrapper(cursor)
 
+    def is_usable(self):
+        try:
+            self.connection.ping()
+        except DatabaseError:
+            return False
+        else:
+            return True
+
     def _rollback(self):
         try:
             BaseDatabaseWrapper._rollback(self)

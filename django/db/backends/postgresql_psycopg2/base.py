@@ -4,6 +4,7 @@ PostgreSQL database backend for Django.
 Requires psycopg 2: http://initd.org/projects/psycopg2
 """
 import sys
+import time
 
 from django.db import utils
 from django.db.backends import *
@@ -53,6 +54,7 @@ class CursorWrapper(object):
         except Database.IntegrityError, e:
             raise utils.IntegrityError, utils.IntegrityError(*tuple(e)), sys.exc_info()[2]
         except Database.DatabaseError, e:
+            self.wrapper.errors_occurred = True
             raise utils.DatabaseError, utils.DatabaseError(*tuple(e)), sys.exc_info()[2]
 
     def executemany(self, query, args):
@@ -61,6 +63,7 @@ class CursorWrapper(object):
         except Database.IntegrityError, e:
             raise utils.IntegrityError, utils.IntegrityError(*tuple(e)), sys.exc_info()[2]
         except Database.DatabaseError, e:
+            self.wrapper.errors_occurred = True
             raise utils.DatabaseError, utils.DatabaseError(*tuple(e)), sys.exc_info()[2]
 
     def __getattr__(self, attr):
@@ -102,6 +105,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         'istartswith': 'LIKE UPPER(%s)',
         'iendswith': 'LIKE UPPER(%s)',
     }
+
+    _errors_occurred_default = False
 
     def __init__(self, *args, **kwargs):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
@@ -157,6 +162,11 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def _cursor(self):
         settings_dict = self.settings_dict
         if self.connection is None:
+            # Reset parameters defining when to close the connection
+            max_age = self.settings_dict['CONN_MAX_AGE']
+            self.close_at = None if max_age is None else time.time() + max_age
+            self.errors_occurred = False
+            # Establish the connection
             if settings_dict['NAME'] == '':
                 from django.core.exceptions import ImproperlyConfigured
                 raise ImproperlyConfigured("You need to specify NAME in your Django settings file.")
@@ -197,7 +207,17 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             connection_created.send(sender=self.__class__, connection=self)
         cursor = self.connection.cursor()
         cursor.tzinfo_factory = utc_tzinfo_factory if settings.USE_TZ else None
+        cursor.wrapper = self
         return CursorWrapper(cursor)
+
+    def is_usable(self):
+        try:
+            # Use a psycopg cursor directly, bypassing Django's utilities.
+            self.connection.cursor().execute("SELECT 1")
+        except DatabaseError:
+            return False
+        else:
+            return True
 
     def _enter_transaction_management(self, managed):
         """

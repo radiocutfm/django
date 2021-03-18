@@ -24,7 +24,7 @@ from django.utils.encoding import smart_str
 from django.utils.http import urlencode
 from django.utils.importlib import import_module
 from django.utils.itercompat import is_iterable
-from django.db import close_connection
+from django.db import close_old_connections
 from django.test.utils import ContextList
 
 __all__ = ('Client', 'RequestFactory', 'encode_file', 'encode_multipart')
@@ -83,9 +83,9 @@ class ClientHandler(BaseHandler):
             request._dont_enforce_csrf_checks = not self.enforce_csrf_checks
             response = self.get_response(request)
         finally:
-            signals.request_finished.disconnect(close_connection)
+            signals.request_finished.disconnect(close_old_connections)
             signals.request_finished.send(sender=self.__class__)
-            signals.request_finished.connect(close_connection)
+            signals.request_finished.connect(close_old_connections)
 
         return response
 

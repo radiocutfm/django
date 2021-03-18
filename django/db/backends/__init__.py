@@ -1,3 +1,4 @@
+import time
 from django.db.utils import DatabaseError
 
 try:
@@ -21,6 +22,8 @@ class BaseDatabaseWrapper(object):
     ops = None
     vendor = 'unknown'
 
+    _errors_occurred_default = True
+
     def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS,
                  allow_thread_sharing=False):
         # `settings_dict` should be a dictionary containing keys such as
@@ -38,6 +41,10 @@ class BaseDatabaseWrapper(object):
         self._dirty = None
         self._thread_ident = thread.get_ident()
         self.allow_thread_sharing = allow_thread_sharing
+
+        # Connection termination related attributes
+        self.close_at = None
+        self.errors_occurred = self._errors_occurred_default
 
     def __eq__(self, other):
         return self.alias == other.alias
@@ -309,6 +316,26 @@ class BaseDatabaseWrapper(object):
         if self.connection is not None:
             self.connection.close()
             self.connection = None
+
+    def close_if_unusable_or_obsolete(self):
+        if self.connection is not None:
+            if self.errors_occurred:
+                if self.is_usable():
+                    self.errors_occurred = False
+                else:
+                    self.close()
+                    return
+            if self.close_at is not None and time.time() >= self.close_at:
+                self.close()
+                return
+
+    def is_usable(self):
+        """
+        Test if the database connection is usable.
+
+        This function may assume that self.connection is not None.
+        """
+        raise NotImplementedError
 
     def cursor(self):
         self.validate_thread_sharing()

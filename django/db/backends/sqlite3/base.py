@@ -288,6 +288,9 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self._sqlite_create_connection()
         return self.connection.cursor(factory=SQLiteCursorWrapper)
 
+    def is_usable(self):
+        return True
+
     def check_constraints(self, table_names=None):
         """
         Checks each table name in `table_names` for rows with invalid foreign key references. This method is
