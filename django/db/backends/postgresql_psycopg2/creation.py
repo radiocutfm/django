@@ -1,3 +1,4 @@
+import os
 import psycopg2.extensions
 
 from django.db.backends.creation import BaseDatabaseCreation
@@ -38,6 +39,10 @@ class DatabaseCreation(BaseDatabaseCreation):
         assert self.connection.settings_dict['TEST_COLLATION'] is None, "PostgreSQL does not support collation setting at database creation time."
         if self.connection.settings_dict['TEST_CHARSET']:
             return "WITH ENCODING '%s'" % self.connection.settings_dict['TEST_CHARSET']
+
+        tablespace = self.connection.settings_dict.get('TEST_TABLESPACE', None)
+        if tablespace:
+            return "TABLESPACE " + tablespace
         return ''
 
     def sql_indexes_for_field(self, model, f, style):

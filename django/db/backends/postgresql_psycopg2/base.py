@@ -45,8 +45,9 @@ class CursorWrapper(object):
     particular exception instances and reraise them with the right types.
     """
 
-    def __init__(self, cursor):
+    def __init__(self, cursor, wrapper=None):
         self.cursor = cursor
+        self.wrapper = wrapper
 
     def execute(self, query, args=None):
         try:
@@ -54,7 +55,8 @@ class CursorWrapper(object):
         except Database.IntegrityError, e:
             raise utils.IntegrityError, utils.IntegrityError(*tuple(e)), sys.exc_info()[2]
         except Database.DatabaseError, e:
-            self.wrapper.errors_occurred = True
+            if self.wrapper:
+                self.wrapper.errors_occurred = True
             raise utils.DatabaseError, utils.DatabaseError(*tuple(e)), sys.exc_info()[2]
 
     def executemany(self, query, args):
@@ -63,7 +65,8 @@ class CursorWrapper(object):
         except Database.IntegrityError, e:
             raise utils.IntegrityError, utils.IntegrityError(*tuple(e)), sys.exc_info()[2]
         except Database.DatabaseError, e:
-            self.wrapper.errors_occurred = True
+            if self.wrapper:
+                self.wrapper.errors_occurred = True
             raise utils.DatabaseError, utils.DatabaseError(*tuple(e)), sys.exc_info()[2]
 
     def __getattr__(self, attr):
@@ -207,8 +210,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             connection_created.send(sender=self.__class__, connection=self)
         cursor = self.connection.cursor()
         cursor.tzinfo_factory = utc_tzinfo_factory if settings.USE_TZ else None
-        cursor.wrapper = self
-        return CursorWrapper(cursor)
+        return CursorWrapper(cursor, self)
 
     def is_usable(self):
         try:
